@@ -104,6 +104,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # Load predefined classes to the list
         self.loadPredefinedClasses(defaultPrefdefClassFile)
+        self.defaultPrefdefClassFile = defaultPrefdefClassFile
 
         # Main widgets and related state.
         self.labelDialog = LabelDialog(parent=self, listItem=self.labelHist)
@@ -1461,7 +1462,7 @@ class MainWindow(QMainWindow, WindowMixin):
             return
 
         self.set_format(FORMAT_YOLO)
-        tYoloParseReader = YoloReader(txtPath, self.image)
+        tYoloParseReader = YoloReader(txtPath, self.image, self.defaultPrefdefClassFile)
         shapes = tYoloParseReader.getShapes()
         print (shapes)
         self.loadLabels(shapes)
