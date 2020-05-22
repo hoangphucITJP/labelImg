@@ -180,13 +180,14 @@ class MainWindow(QMainWindow, WindowMixin):
         scroll = QScrollArea()
         scroll.setWidget(self.canvas)
         scroll.setWidgetResizable(True)
+        scroll.mapFromGlobal
         self.scrollBars = {
             Qt.Vertical: scroll.verticalScrollBar(),
             Qt.Horizontal: scroll.horizontalScrollBar()
         }
         self.scrollArea = scroll
         self.canvas.scrollRequest.connect(self.scrollRequest)
-
+        self.canvas.PanningRequest.connect(self.PanningRequest)
         self.canvas.newShape.connect(self.newShape)
         self.canvas.shapeMoved.connect(self.setDirty)
         self.canvas.selectionChanged.connect(self.shapeSelectionChanged)
@@ -273,8 +274,7 @@ class MainWindow(QMainWindow, WindowMixin):
         zoom.setDefaultWidget(self.zoomWidget)
         self.zoomWidget.setWhatsThis(
             u"Zoom in or out of the image. Also accessible with"
-            " %s and %s from the canvas." % (fmtShortcut("Ctrl+[-+]"),
-                                             fmtShortcut("Ctrl+Wheel")))
+            " %s from the canvas." % (fmtShortcut("Ctrl+[-+]")))
         self.zoomWidget.setEnabled(False)
 
         zoomIn = action(getStr('zoomin'), partial(self.addZoom, 10),
@@ -910,6 +910,15 @@ class MainWindow(QMainWindow, WindowMixin):
         units = - delta / (8 * 15)
         bar = self.scrollBars[orientation]
         bar.setValue(bar.value() + bar.singleStep() * units)
+
+    def PanningRequest(self, deltax, deltay):
+        unitsx = - deltax #/ (8 * 15)
+        unitsy = - deltay #/ (8 * 15)
+
+        bar = self.scrollBars[Qt.Vertical]
+        bar.setValue(bar.value() + unitsy)
+        bar = self.scrollBars[Qt.Horizontal]
+        bar.setValue(bar.value() + unitsx)
 
     def setZoom(self, value):
         self.actions.fitWidth.setChecked(False)

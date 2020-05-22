@@ -28,8 +28,8 @@ class Canvas(QWidget):
     selectionChanged = pyqtSignal(bool)
     shapeMoved = pyqtSignal()
     drawingPolygon = pyqtSignal(bool)
-
-    CREATE, EDIT = list(range(2))
+    PanningRequest = pyqtSignal(int, int)
+    CREATE, EDIT, PAN = list(range(3))
 
     epsilon = 11.0
 
@@ -85,6 +85,9 @@ class Canvas(QWidget):
     def editing(self):
         return self.mode == self.EDIT
 
+    def panning(self):
+        return self.mode == self.PAN
+
     def setEditing(self, value=True):
         self.mode = self.EDIT if value else self.CREATE
         if not value:  # Create
@@ -92,6 +95,9 @@ class Canvas(QWidget):
             self.deSelectShape()
         self.prevPoint = QPointF()
         self.repaint()
+
+    def setPanning(self, value=True):
+        self.mode = self.PAN if value else self.EDIT
 
     def unHighlight(self):
         if self.hShape:
@@ -107,10 +113,15 @@ class Canvas(QWidget):
 
         # Update coordinates in status bar if image is opened
         window = self.parent().window()
-        if window.filePath is not None:
-            self.parent().window().labelCoordinates.setText(
-                'X: %d; Y: %d' % (pos.x(), pos.y()))
-
+        # if window.filePath is not None:
+        #     self.parent().window().labelCoordinates.setText(
+        #         'X: %d; Y: %d' % (pos.x(), pos.y()))
+        # Panning
+        if self.panning():
+            self.overrideCursor(CURSOR_MOVE)
+            delta = pos - self.prevPoint
+            self.PanningRequest.emit(delta.x(), delta.y())
+            # self.prevPoint = pos
         # Polygon drawing.
         if self.drawing():
             self.overrideCursor(CURSOR_DRAW)
@@ -165,7 +176,7 @@ class Canvas(QWidget):
             return
 
         # Polygon/Vertex moving.
-        if Qt.LeftButton & ev.buttons():
+        if Qt.LeftButton & ev.buttons() and not self.panning():
             if self.selectedVertex():
                 self.boundedMoveVertex(pos)
                 self.shapeMoved.emit()
@@ -220,8 +231,10 @@ class Canvas(QWidget):
             if self.drawing():
                 self.handleDrawing(pos)
             else:
-                self.selectShapePoint(pos)
+                shape_selected = self.selectShapePoint(pos)
                 self.prevPoint = pos
+                if not shape_selected:
+                    self.setPanning(True)
                 self.repaint()
         elif ev.button() == Qt.RightButton and self.editing():
             self.selectShapePoint(pos)
@@ -237,7 +250,7 @@ class Canvas(QWidget):
                 # Cancel the move by deleting the shadow copy.
                 self.selectedShapeCopy = None
                 self.repaint()
-        elif ev.button() == Qt.LeftButton and self.selectedShape:
+        elif ev.button() == Qt.LeftButton and self.selectedShape and not self.panning():
             if self.selectedVertex():
                 self.overrideCursor(CURSOR_POINT)
             else:
@@ -246,6 +259,8 @@ class Canvas(QWidget):
             pos = self.transformPos(ev.pos())
             if self.drawing():
                 self.handleDrawing(pos)
+            elif self.panning():
+                self.setPanning(False)
 
     def endMove(self, copy=False):
         assert self.selectedShape and self.selectedShapeCopy
@@ -317,12 +332,15 @@ class Canvas(QWidget):
             index, shape = self.hVertex, self.hShape
             shape.highlightVertex(index, shape.MOVE_VERTEX)
             self.selectShape(shape)
-            return
+            return True
+
         for shape in reversed(self.shapes):
             if self.isVisible(shape) and shape.containsPoint(point):
                 self.selectShape(shape)
                 self.calculateOffsets(shape, point)
-                return
+                return True
+
+        return False
 
     def calculateOffsets(self, shape, point):
         rect = shape.boundingRect()
@@ -606,10 +624,10 @@ class Canvas(QWidget):
 
         mods = ev.modifiers()
         if Qt.ControlModifier == int(mods) and v_delta:
-            self.zoomRequest.emit(v_delta)
-        else:
             v_delta and self.scrollRequest.emit(v_delta, Qt.Vertical)
             h_delta and self.scrollRequest.emit(h_delta, Qt.Horizontal)
+        else:
+            self.zoomRequest.emit(v_delta)
         ev.accept()
 
     def keyPressEvent(self, ev):
